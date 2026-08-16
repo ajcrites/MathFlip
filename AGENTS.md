@@ -3,8 +3,7 @@ Math Flip is a flash-card app for practicing arithmetic by revealing answers whe
 
 ## Project
 
-- This is a Kotlin Multiplatform application using Compose Multiplatform, with a native iOS host in `iosApp`.
-- Shared UI and application logic live under `shared/src/commonMain`; iOS-specific Kotlin code lives under `shared/src/iosMain`.
+- This is a Kotlin Multiplatform application using Compose Multiplatform. Read `README.md` for the current architecture and project structure before making structural or platform-specific changes.
 - The iOS bundle identifier is `com.mathfactsexp.app`.
 - Preserve unrelated user changes. Do not commit changes unless explicitly requested.
 

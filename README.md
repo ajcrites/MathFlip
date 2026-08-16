@@ -1,19 +1,21 @@
 # Math Flip
 
-A small iOS flash-card app for practicing arithmetic, built with Kotlin Multiplatform and Compose Multiplatform.
+A small flash-card app for practicing arithmetic, built with Kotlin Multiplatform and Compose Multiplatform.
 
 ## Requirements
+
+### iOS (current platform)
 
 - macOS with Xcode
 - JDK 17 or newer
 
-If you installed the JDK with Homebrew, add it to your shell before running Gradle directly:
-
-```shell
-export JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home
-```
-
 ## Run the app
+
+### Script
+
+Use the development scripts in `scripts/` to test, build, deploy, list devices, and inspect a physical device. Run a script with `--help` to inspect its options. Local physical-device identifiers can be stored in the gitignored `docs/devices.md`; use `docs/devices.example.md` as a template.
+
+### Manual
 
 1. Open `iosApp/iosApp.xcodeproj` in Xcode.
 2. Choose an iPhone simulator.
