@@ -27,7 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlin.random.Random
+import com.mathfacts.domain.MathFactGenerator
 
 private val DeepBlue = Color(0xFF071A3D)
 private val EdgePurple = Color(0xFF3D1E68)
@@ -35,7 +35,8 @@ private val EdgePurple = Color(0xFF3D1E68)
 @Composable
 fun App() {
     MaterialTheme {
-        var fact by remember { mutableStateOf(randomMathFact()) }
+        val factGenerator = remember { MathFactGenerator() }
+        var fact by remember { mutableStateOf(factGenerator.next()) }
         var isAnswerVisible by remember { mutableStateOf(false) }
         val interactionSource = remember { MutableInteractionSource() }
         val faceDownDetector = remember { FaceDownDetector() }
@@ -66,7 +67,7 @@ fun App() {
                     indication = null,
                     onClick = {
                         if (isAnswerVisible) {
-                            fact = randomMathFact()
+                            fact = factGenerator.next()
                             isAnswerVisible = false
                         } else {
                             isAnswerVisible = true
@@ -116,40 +117,6 @@ private fun FactText(
             ),
         ),
     )
-}
-
-enum class Operation(val symbol: String) {
-    Addition("+"),
-    Subtraction("−"),
-}
-
-data class MathFact(
-    val first: Int,
-    val second: Int,
-    val operation: Operation,
-) {
-    val answer: Int
-        get() = when (operation) {
-            Operation.Addition -> first + second
-            Operation.Subtraction -> first - second
-        }
-
-    val question: String
-        get() = "$first ${operation.symbol} $second"
-
-    val equation: String
-        get() = "$question = $answer"
-}
-
-fun randomMathFact(random: Random = Random.Default): MathFact {
-    val operation = if (random.nextBoolean()) Operation.Addition else Operation.Subtraction
-    val first = random.nextInt(from = 0, until = 21)
-    val second = when (operation) {
-        Operation.Addition -> random.nextInt(from = 0, until = 21 - first)
-        Operation.Subtraction -> random.nextInt(from = 0, until = first + 1)
-    }
-
-    return MathFact(first = first, second = second, operation = operation)
 }
 
 expect class FaceDownDetector() {

@@ -1,5 +1,8 @@
 package com.mathfacts
 
+import com.mathfacts.domain.MathFact
+import com.mathfacts.domain.MathFactGenerator
+import com.mathfacts.domain.Operation
 import kotlin.random.Random
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -11,7 +14,7 @@ class MathFactTest {
         val random = Random(1234)
 
         repeat(10_000) {
-            val fact = randomMathFact(random)
+            val fact = MathFactGenerator(random = random).next()
 
             assertTrue(fact.first in 0..20)
             assertTrue(fact.second >= 0)
@@ -21,6 +24,38 @@ class MathFactTest {
                 Operation.Subtraction -> assertTrue(fact.second <= fact.first)
             }
         }
+    }
+
+    @Test
+    fun generatorSupportsACustomRange() {
+        val range = 4..12
+        val generator = MathFactGenerator(range = range, random = Random(5678))
+
+        repeat(1_000) {
+            val fact = generator.next()
+
+            assertTrue(fact.first in range)
+            assertTrue(fact.second in range)
+            assertTrue(fact.answer in range)
+        }
+    }
+
+    @Test
+    fun generatorSupportsNegativeOperandsAndAnswers() {
+        val range = -20..20
+        val generator = MathFactGenerator(range = range, random = Random(9012))
+        var foundNegativeAnswer = false
+
+        repeat(1_000) {
+            val fact = generator.next()
+
+            assertTrue(fact.first in range)
+            assertTrue(fact.second in range)
+            assertTrue(fact.answer in range)
+            foundNegativeAnswer = foundNegativeAnswer || fact.answer < 0
+        }
+
+        assertTrue(foundNegativeAnswer)
     }
 
     @Test
