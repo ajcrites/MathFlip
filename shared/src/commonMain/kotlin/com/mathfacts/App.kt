@@ -17,6 +17,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
@@ -26,6 +29,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -39,6 +43,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -61,6 +66,10 @@ private val AccentBlue = Color(0xFF3B82F6)
 private val AccentYellow = Color(0xFFFFC857)
 private val MutedBlue = Color(0xFF243A60)
 private val White = Color(0xFFF8FAFF)
+private val IncorrectRed = Color(0xFFFF5252)
+private val CorrectGreen = Color(0xFF42D77D)
+private val IncorrectGradientRed = Color(0xFFC62828)
+private val CorrectGradientGreen = Color(0xFF008F4C)
 
 private enum class Screen {
     Menu,
@@ -317,6 +326,8 @@ private fun UpperBoundInput(
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = AccentYellow,
                 unfocusedBorderColor = AccentBlue.copy(alpha = 0.75f),
+                focusedLabelColor = White,
+                unfocusedLabelColor = White,
                 cursorColor = AccentYellow,
                 errorBorderColor = Color(0xFFFF7A7A),
             ),
@@ -370,9 +381,15 @@ private fun PracticeScreen(
     }
     var fact by remember(factGenerator) { mutableStateOf(factGenerator.next()) }
     var isAnswerVisible by remember(factGenerator) { mutableStateOf(false) }
-    val interactionSource = remember { MutableInteractionSource() }
+    val results = remember(factGenerator) { mutableStateListOf<Boolean>() }
     val faceDownDetector = remember { FaceDownDetector() }
 
+    fun recordAnswer(isCorrect: Boolean) {
+        if (!isAnswerVisible) return
+        results += isCorrect
+        fact = factGenerator.next()
+        isAnswerVisible = false
+    }
     DisposableEffect(faceDownDetector) {
         faceDownDetector.start { isAnswerVisible = true }
         onDispose { faceDownDetector.stop() }
@@ -381,23 +398,65 @@ private fun PracticeScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = {
-                    if (isAnswerVisible) {
-                        fact = factGenerator.next()
-                        isAnswerVisible = false
-                    } else {
-                        isAnswerVisible = true
-                    }
+            .then(
+                if (isAnswerVisible) {
+                    Modifier.background(
+                        Brush.horizontalGradient(
+                            0.0f to IncorrectGradientRed.copy(alpha = 0.5f),
+                            0.25f to IncorrectGradientRed.copy(alpha = 0.0f),
+                            0.75f to CorrectGradientGreen.copy(alpha = 0.0f),
+                            1.0f to CorrectGradientGreen.copy(alpha = 0.5f),
+                        ),
+                    )
+                } else {
+                    Modifier
                 },
-            ),
+            )
+            .pointerInput(isAnswerVisible) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    val up = waitForUpOrCancellation() ?: return@awaitEachGesture
+                    val horizontalMovement = up.position.x - down.position.x
+                    val swipeThreshold = 48.dp.toPx()
+
+                    if (!isAnswerVisible) {
+                        isAnswerVisible = true
+                    } else if (horizontalMovement <= -swipeThreshold) {
+                        recordAnswer(isCorrect = false)
+                    } else if (horizontalMovement >= swipeThreshold) {
+                        recordAnswer(isCorrect = true)
+                    } else if (up.position.x <= size.width * 0.2f) {
+                        recordAnswer(isCorrect = false)
+                    } else if (up.position.x >= size.width * 0.8f) {
+                        recordAnswer(isCorrect = true)
+                    }
+                }
+            },
     ) {
         BackButton(
             onClick = onBack,
             modifier = Modifier.align(Alignment.TopStart).padding(start = 18.dp, top = 14.dp),
         )
+
+        Row(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = 24.dp, start = 80.dp, end = 80.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            results.forEachIndexed { index, isCorrect ->
+                Box(
+                    modifier = Modifier
+                        .size(12.dp)
+                        .clip(RoundedCornerShape(50))
+                        .background(if (isCorrect) CorrectGreen else IncorrectRed)
+                        .semantics {
+                            contentDescription =
+                                "Answer ${index + 1}: ${if (isCorrect) "correct" else "incorrect"}"
+                        },
+                )
+            }
+        }
 
         if (isAnswerVisible) {
             Column(
