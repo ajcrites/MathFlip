@@ -1,5 +1,8 @@
 package com.mathfacts
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.keyframes
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -25,14 +28,18 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -49,9 +56,11 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import com.mathfacts.domain.DEFAULT_MAX_BOUND
 import com.mathfacts.domain.MathFactGenerator
 import com.mathfacts.domain.Operation
+import kotlinx.coroutines.launch
 
 private val DeepBlue = Color(0xFF071A3D)
 private val EdgePurple = Color(0xFF3D1E68)
@@ -67,6 +76,17 @@ private val CorrectGradientGreen = Color(0xFF006B3C)
 private enum class Screen {
     Menu,
     Practice,
+    Results,
+}
+
+private enum class PracticePhase {
+    Question,
+    Answer,
+    Scoring,
+}
+
+private object FullMotionDurationScale : MotionDurationScale {
+    override val scaleFactor: Float = 1f
 }
 
 @Composable
@@ -79,10 +99,24 @@ fun App() {
         mutableStateOf(TextFieldValue(DEFAULT_MAX_BOUND.toString()))
     }
     var allowNegatives by remember { mutableStateOf(false) }
+    var correctAnswers by remember { mutableStateOf(0) }
+    var incorrectAnswers by remember { mutableStateOf(0) }
+    val navigationAlpha = remember { Animatable(1f) }
+    val navigationScope = rememberCoroutineScope()
+
+    fun navigateTo(destination: Screen) {
+        if (destination == screen) return
+        navigationScope.launch(FullMotionDurationScale) {
+            navigationAlpha.animateTo(0f, tween(durationMillis = 250))
+            screen = destination
+            navigationAlpha.animateTo(1f, tween(durationMillis = 250))
+        }
+    }
 
     MaterialTheme {
         GradientBackground {
-            when (screen) {
+            Box(Modifier.fillMaxSize().graphicsLayer { alpha = navigationAlpha.value }) {
+                when (screen) {
                 Screen.Menu -> MainMenu(
                     selectedOperations = selectedOperations,
                     onToggleOperation = { operation ->
@@ -96,15 +130,36 @@ fun App() {
                     onUpperBoundChange = { upperBound = it },
                     allowNegatives = allowNegatives,
                     onAllowNegativesChange = { allowNegatives = it },
-                    onGo = { screen = Screen.Practice },
+                    onGo = {
+                        correctAnswers = 0
+                        incorrectAnswers = 0
+                        navigateTo(Screen.Practice)
+                    },
                 )
 
                 Screen.Practice -> PracticeScreen(
                     upperBound = upperBound.text.toInt(),
                     allowNegatives = allowNegatives,
                     operations = selectedOperations,
-                    onBack = { screen = Screen.Menu },
+                    onBack = { navigateTo(Screen.Menu) },
+                    onResults = { correct, incorrect ->
+                        correctAnswers = correct
+                        incorrectAnswers = incorrect
+                        navigateTo(Screen.Results)
+                    },
                 )
+
+                Screen.Results -> ResultsScreen(
+                    correctAnswers = correctAnswers,
+                    incorrectAnswers = incorrectAnswers,
+                    onTryAgain = {
+                        correctAnswers = 0
+                        incorrectAnswers = 0
+                        navigateTo(Screen.Practice)
+                    },
+                    onHome = { navigateTo(Screen.Menu) },
+                )
+                }
             }
         }
     }
@@ -326,24 +381,74 @@ private fun PracticeScreen(
     allowNegatives: Boolean,
     operations: Set<Operation>,
     onBack: () -> Unit,
+    onResults: (correct: Int, incorrect: Int) -> Unit,
 ) {
     val range = if (allowNegatives) -upperBound..upperBound else 0..upperBound
     val factGenerator = remember(range, operations) {
         MathFactGenerator(range = range, operations = operations)
     }
     var fact by remember(factGenerator) { mutableStateOf(factGenerator.next()) }
-    var isAnswerVisible by remember(factGenerator) { mutableStateOf(false) }
+    var phase by remember(factGenerator) { mutableStateOf(PracticePhase.Question) }
     val results = remember(factGenerator) { mutableStateListOf<Boolean>() }
     val faceDownDetector = remember { FaceDownDetector() }
+    val scope = rememberCoroutineScope()
+    val questionAlpha = remember(factGenerator) { Animatable(0f) }
+    val feedbackProgress = remember(factGenerator) { Animatable(0f) }
+    val feedbackAlpha = remember(factGenerator) { Animatable(0f) }
+    val contentAlpha = remember(factGenerator) { Animatable(1f) }
+    val contentScale = remember(factGenerator) { Animatable(1f) }
+    var feedbackIsCorrect by remember(factGenerator) { mutableStateOf<Boolean?>(null) }
+
+    fun showAnswer() {
+        if (phase != PracticePhase.Question) return
+        scope.launch(FullMotionDurationScale) {
+            contentAlpha.animateTo(0f, tween(durationMillis = 125))
+            phase = PracticePhase.Answer
+            contentScale.snapTo(0.82f)
+            launch {
+                contentScale.animateTo(
+                    1f,
+                    keyframes {
+                        durationMillis = 350
+                        0.82f at 0
+                        1.12f at 220
+                        1f at 350
+                    },
+                )
+            }
+            contentAlpha.animateTo(1f, tween(durationMillis = 125))
+        }
+    }
 
     fun recordAnswer(isCorrect: Boolean) {
-        if (!isAnswerVisible) return
-        results += isCorrect
-        fact = factGenerator.next()
-        isAnswerVisible = false
+        if (phase != PracticePhase.Answer) return
+        phase = PracticePhase.Scoring
+        scope.launch(FullMotionDurationScale) {
+            results += isCorrect
+            feedbackIsCorrect = isCorrect
+            feedbackProgress.snapTo(0f)
+            feedbackAlpha.snapTo(1f)
+            feedbackProgress.animateTo(1f, tween(durationMillis = 500))
+            contentAlpha.animateTo(0f, tween(durationMillis = 125))
+            fact = factGenerator.next()
+            phase = PracticePhase.Question
+            contentScale.snapTo(1f)
+            launch { contentAlpha.animateTo(1f, tween(durationMillis = 250)) }
+            feedbackAlpha.animateTo(0f, tween(durationMillis = 250))
+            feedbackIsCorrect = null
+        }
+    }
+
+    LaunchedEffect(fact) {
+        questionAlpha.snapTo(0f)
+        launch(FullMotionDurationScale) {
+            questionAlpha.animateTo(1f, tween(durationMillis = 250))
+        }
     }
     DisposableEffect(faceDownDetector) {
-        faceDownDetector.start { isAnswerVisible = true }
+        faceDownDetector.start {
+            showAnswer()
+        }
         onDispose { faceDownDetector.stop() }
     }
 
@@ -351,7 +456,7 @@ private fun PracticeScreen(
         modifier = Modifier
             .fillMaxSize()
             .then(
-                if (isAnswerVisible) {
+                if (phase == PracticePhase.Answer) {
                     Modifier.background(
                         Brush.horizontalGradient(
                             0.0f to IncorrectGradientRed,
@@ -364,23 +469,26 @@ private fun PracticeScreen(
                     Modifier
                 },
             )
-            .pointerInput(isAnswerVisible) {
+            .pointerInput(phase) {
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
                     val up = waitForUpOrCancellation() ?: return@awaitEachGesture
                     val horizontalMovement = up.position.x - down.position.x
                     val swipeThreshold = 48.dp.toPx()
+                    val tappedTopAction = up.position.y <= 80.dp.toPx() &&
+                        (up.position.x <= 80.dp.toPx() || up.position.x >= size.width - 160.dp.toPx())
 
-                    if (!isAnswerVisible) {
-                        isAnswerVisible = true
-                    } else if (horizontalMovement <= -swipeThreshold) {
-                        recordAnswer(isCorrect = false)
-                    } else if (horizontalMovement >= swipeThreshold) {
-                        recordAnswer(isCorrect = true)
-                    } else if (up.position.x <= size.width * 0.2f) {
-                        recordAnswer(isCorrect = false)
-                    } else if (up.position.x >= size.width * 0.8f) {
-                        recordAnswer(isCorrect = true)
+                    if (tappedTopAction) return@awaitEachGesture
+
+                    when (phase) {
+                        PracticePhase.Question -> showAnswer()
+                        PracticePhase.Answer -> when {
+                            horizontalMovement <= -swipeThreshold -> recordAnswer(isCorrect = false)
+                            horizontalMovement >= swipeThreshold -> recordAnswer(isCorrect = true)
+                            up.position.x <= size.width * 0.2f -> recordAnswer(isCorrect = false)
+                            up.position.x >= size.width * 0.8f -> recordAnswer(isCorrect = true)
+                        }
+                        PracticePhase.Scoring -> Unit
                     }
                 }
             },
@@ -389,6 +497,23 @@ private fun PracticeScreen(
             onClick = onBack,
             modifier = Modifier.align(Alignment.TopStart).padding(start = 18.dp, top = 14.dp),
         )
+
+        Button(
+            onClick = {
+                onResults(
+                    results.count { it },
+                    results.count { !it },
+                )
+            },
+            modifier = Modifier.align(Alignment.TopEnd).padding(end = 18.dp, top = 14.dp),
+            shape = RoundedCornerShape(14.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MutedBlue,
+                contentColor = White,
+            ),
+        ) {
+            Text("Results", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        }
 
         Row(
             modifier = Modifier
@@ -410,22 +535,154 @@ private fun PracticeScreen(
             }
         }
 
-        if (isAnswerVisible) {
-            Column(
-                modifier = Modifier.align(Alignment.Center).padding(horizontal = 48.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                FactText(text = fact.equation, fontSize = 48)
-                FactText(text = fact.answer.toString(), fontSize = 168)
+        Box(
+            modifier = Modifier
+                .align(Alignment.Center)
+                .zIndex(1f)
+                .graphicsLayer {
+                    alpha = contentAlpha.value
+                    scaleX = contentScale.value
+                    scaleY = contentScale.value
+                },
+        ) {
+            if (phase != PracticePhase.Question) {
+                Column(
+                    modifier = Modifier.padding(horizontal = 48.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    FactText(text = fact.equation, fontSize = 48)
+                    FactText(text = fact.answer.toString(), fontSize = 168)
+                }
+            } else {
+                FactText(
+                    text = fact.question,
+                    fontSize = 168,
+                    modifier = Modifier
+                        .padding(horizontal = 48.dp)
+                        .graphicsLayer { alpha = questionAlpha.value },
+                )
             }
-        } else {
-            FactText(
-                text = fact.question,
-                fontSize = 168,
-                modifier = Modifier.align(Alignment.Center).padding(horizontal = 48.dp),
+        }
+
+        feedbackIsCorrect?.let { isCorrect ->
+            val progress = feedbackProgress.value
+            val feedbackBrush = if (isCorrect) {
+                if (progress >= 0.999f) {
+                    Brush.horizontalGradient(listOf(CorrectGradientGreen, CorrectGradientGreen))
+                } else {
+                    val boundary = 0.75f * (1f - progress)
+                    Brush.horizontalGradient(
+                        colorStops = arrayOf(
+                            0f to Color.Transparent,
+                            boundary to Color.Transparent,
+                            (boundary + 0.08f).coerceAtMost(1f) to CorrectGradientGreen,
+                            1f to CorrectGradientGreen,
+                        ),
+                    )
+                }
+            } else {
+                if (progress >= 0.999f) {
+                    Brush.horizontalGradient(listOf(IncorrectGradientRed, IncorrectGradientRed))
+                } else {
+                    val boundary = 0.25f + (0.75f * progress)
+                    Brush.horizontalGradient(
+                        colorStops = arrayOf(
+                            0f to IncorrectGradientRed,
+                            (boundary - 0.08f).coerceAtLeast(0f) to IncorrectGradientRed,
+                            boundary to Color.Transparent,
+                            1f to Color.Transparent,
+                        ),
+                    )
+                }
+            }
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer { alpha = feedbackAlpha.value }
+                    .background(feedbackBrush),
             )
         }
+    }
+}
+
+@Composable
+private fun ResultsScreen(
+    correctAnswers: Int,
+    incorrectAnswers: Int,
+    onTryAgain: () -> Unit,
+    onHome: () -> Unit,
+) {
+    val totalAnswers = correctAnswers + incorrectAnswers
+    val correctFraction = if (totalAnswers == 0) 0.5f else correctAnswers.toFloat() / totalAnswers
+    val backgroundBrush = when (correctFraction) {
+        0f -> Brush.verticalGradient(listOf(IncorrectGradientRed, IncorrectGradientRed))
+        1f -> Brush.verticalGradient(listOf(CorrectGradientGreen, CorrectGradientGreen))
+        else -> {
+            val boundary = 1f - correctFraction
+            val transitionStart = (boundary - 0.06f).coerceAtLeast(0f)
+            val transitionEnd = (boundary + 0.06f).coerceAtMost(1f)
+            Brush.verticalGradient(
+                colorStops = arrayOf(
+                    0f to IncorrectGradientRed,
+                    transitionStart to IncorrectGradientRed,
+                    transitionEnd to CorrectGradientGreen,
+                    1f to CorrectGradientGreen,
+                ),
+            )
+        }
+    }
+
+    Box(
+        modifier = Modifier.fillMaxSize().background(backgroundBrush),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(28.dp),
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    text = "$correctAnswers Correct",
+                    color = White,
+                    fontSize = 48.sp,
+                    fontWeight = FontWeight.Black,
+                )
+                Text(
+                    text = "$incorrectAnswers Incorrect",
+                    color = White,
+                    fontSize = 48.sp,
+                    fontWeight = FontWeight.Black,
+                )
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+                ResultsActionButton("Try Again", onTryAgain)
+                ResultsActionButton("Home", onHome)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ResultsActionButton(text: String, onClick: () -> Unit) {
+    Button(
+        onClick = onClick,
+        shape = RoundedCornerShape(18.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = AccentYellow,
+            contentColor = AccentBlue,
+        ),
+    ) {
+        Text(
+            text = text,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+            fontSize = 22.sp,
+            fontWeight = FontWeight.Black,
+        )
     }
 }
 
