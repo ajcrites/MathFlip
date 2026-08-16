@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -28,11 +29,13 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -207,7 +210,7 @@ private fun MainMenu(
             shape = RoundedCornerShape(18.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = AccentYellow,
-                contentColor = DeepBlue,
+                contentColor = AccentBlue,
                 disabledContainerColor = MutedBlue,
                 disabledContentColor = White.copy(alpha = 0.4f),
             ),
@@ -292,6 +295,14 @@ private fun UpperBoundInput(
     modifier: Modifier = Modifier,
 ) {
     val focusManager = LocalFocusManager.current
+    var isFocused by remember { mutableStateOf(false) }
+
+    LaunchedEffect(isFocused) {
+        if (isFocused) {
+            withFrameNanos { }
+            onValueChange(value.copy(selection = TextRange(0, value.text.length)))
+        }
+    }
 
     Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         OutlinedTextField(
@@ -304,9 +315,7 @@ private fun UpperBoundInput(
             modifier = Modifier
                 .width(130.dp)
                 .onFocusChanged { state ->
-                    if (state.isFocused) {
-                        onValueChange(value.copy(selection = TextRange(0, value.text.length)))
-                    }
+                    isFocused = state.isFocused
                 },
             textStyle = TextStyle(
                 color = White,
@@ -318,7 +327,7 @@ private fun UpperBoundInput(
             isError = isError,
             label = { Text("Up to") },
             keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Number,
+                keyboardType = KeyboardType.NumberPassword,
                 imeAction = ImeAction.Done,
             ),
             keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
@@ -332,6 +341,24 @@ private fun UpperBoundInput(
                 errorBorderColor = Color(0xFFFF7A7A),
             ),
         )
+
+        Box(
+            modifier = Modifier.height(32.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (isFocused) {
+                Text(
+                    text = "Done",
+                    modifier = Modifier
+                        .semantics { contentDescription = "Finish editing upper bound" }
+                        .clickable(role = Role.Button) { focusManager.clearFocus() }
+                        .padding(horizontal = 12.dp, vertical = 4.dp),
+                    color = AccentYellow,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+        }
     }
 }
 
