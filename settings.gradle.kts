@@ -13,6 +13,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "MathFacts"
+rootProject.name = "MathFlip"
 include(":shared")
-

@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct MathFactsApp: App {
+struct MathFlipApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()

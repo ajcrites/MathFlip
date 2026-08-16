@@ -17,7 +17,7 @@ export JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home
 
 1. Open `iosApp/iosApp.xcodeproj` in Xcode.
 2. Choose an iPhone simulator.
-3. Run the `MathFacts` scheme.
+3. Run the `MathFlip` scheme.
 
 Xcode invokes Gradle to compile the shared Kotlin UI into an iOS framework before building the SwiftUI host app.
 
