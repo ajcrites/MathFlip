@@ -9,19 +9,16 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -36,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -48,6 +46,7 @@ import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -86,8 +85,7 @@ fun App() {
                     selectedOperations = selectedOperations,
                     onToggleOperation = { operation ->
                         selectedOperations = if (operation in selectedOperations) {
-                            if (selectedOperations.size > 1) selectedOperations - operation
-                            else selectedOperations
+                            selectedOperations - operation
                         } else {
                             selectedOperations + operation
                         }
@@ -142,9 +140,18 @@ private fun MainMenu(
     onGo: () -> Unit,
 ) {
     val validUpperBound = upperBound.text.toIntOrNull()?.takeIf { it in 1..999 }
+    val focusManager = LocalFocusManager.current
+    val dismissInteractionSource = remember { MutableInteractionSource() }
 
     Column(
-        modifier = Modifier.fillMaxSize().padding(horizontal = 56.dp, vertical = 24.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .clickable(
+                interactionSource = dismissInteractionSource,
+                indication = null,
+                onClick = { focusManager.clearFocus() },
+            )
+            .padding(horizontal = 56.dp, vertical = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.SpaceBetween,
     ) {
@@ -182,9 +189,12 @@ private fun MainMenu(
         }
 
         Button(
-            onClick = onGo,
+            onClick = {
+                focusManager.clearFocus()
+                onGo()
+            },
             enabled = validUpperBound != null && selectedOperations.isNotEmpty(),
-            modifier = Modifier.width(180.dp),
+            modifier = Modifier.width(if (selectedOperations.isEmpty()) 300.dp else 180.dp),
             shape = RoundedCornerShape(18.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = AccentYellow,
@@ -193,7 +203,11 @@ private fun MainMenu(
                 disabledContentColor = White.copy(alpha = 0.4f),
             ),
         ) {
-            Text("GO!", fontSize = 28.sp, fontWeight = FontWeight.Black)
+            Text(
+                text = if (selectedOperations.isEmpty()) "Select an Operator." else "GO!",
+                fontSize = if (selectedOperations.isEmpty()) 21.sp else 28.sp,
+                fontWeight = FontWeight.Black,
+            )
         }
     }
 }
@@ -206,18 +220,22 @@ private fun OperationSelector(
 ) {
     Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         MenuLabel("Operations")
-        Row(
+        Column(
             modifier = Modifier.padding(top = 10.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            OperationButton("+", Operation.Addition in selectedOperations) {
-                onToggleOperation(Operation.Addition)
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                OperationButton("+", Operation.Addition in selectedOperations) {
+                    onToggleOperation(Operation.Addition)
+                }
+                OperationButton("−", Operation.Subtraction in selectedOperations) {
+                    onToggleOperation(Operation.Subtraction)
+                }
             }
-            OperationButton("−", Operation.Subtraction in selectedOperations) {
-                onToggleOperation(Operation.Subtraction)
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                OperationButton("×", selected = false, enabled = false) {}
+                OperationButton("÷", selected = false, enabled = false) {}
             }
-            OperationButton("×", selected = false, enabled = false) {}
-            OperationButton("÷", selected = false, enabled = false) {}
         }
     }
 }
@@ -264,24 +282,17 @@ private fun UpperBoundInput(
     isError: Boolean,
     modifier: Modifier = Modifier,
 ) {
+    val focusManager = LocalFocusManager.current
+
     Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        MenuLabel("Up to")
         OutlinedTextField(
             value = value,
             onValueChange = { proposed ->
-                val digits = proposed.text.filter(Char::isDigit).take(3)
-                onValueChange(
-                    proposed.copy(
-                        text = digits,
-                        selection = TextRange(
-                            start = proposed.selection.start.coerceIn(0, digits.length),
-                            end = proposed.selection.end.coerceIn(0, digits.length),
-                        ),
-                    ),
-                )
+                if (proposed.text.length <= 3 && proposed.text.all(Char::isDigit)) {
+                    onValueChange(proposed)
+                }
             },
             modifier = Modifier
-                .padding(top = 10.dp)
                 .width(130.dp)
                 .onFocusChanged { state ->
                     if (state.isFocused) {
@@ -296,7 +307,12 @@ private fun UpperBoundInput(
             ),
             singleLine = true,
             isError = isError,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            label = { Text("Up to") },
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Number,
+                imeAction = ImeAction.Done,
+            ),
+            keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
             shape = RoundedCornerShape(16.dp),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = AccentYellow,
@@ -314,22 +330,25 @@ private fun NegativeSelector(
     onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Row(
-        modifier = modifier.clickable(role = Role.Checkbox) { onCheckedChange(!checked) },
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.Center,
-    ) {
-        Checkbox(
-            checked = checked,
-            onCheckedChange = onCheckedChange,
-            colors = CheckboxDefaults.colors(
-                checkedColor = AccentYellow,
-                checkmarkColor = DeepBlue,
-                uncheckedColor = White.copy(alpha = 0.7f),
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(16.dp))
+            .background(if (checked) AccentYellow else MutedBlue)
+            .toggleable(
+                value = checked,
+                role = Role.Checkbox,
+                onValueChange = onCheckedChange,
             ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = if (checked) "Allow Negatives!" else "Allow Negatives?",
+            modifier = Modifier.padding(horizontal = 18.dp, vertical = 18.dp),
+            color = if (checked) AccentBlue else White.copy(alpha = 0.7f),
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Black,
+            textAlign = TextAlign.Center,
         )
-        Spacer(Modifier.width(4.dp))
-        MenuLabel("Allow Negatives?")
     }
 }
 
