@@ -68,8 +68,8 @@ private val MutedBlue = Color(0xFF243A60)
 private val White = Color(0xFFF8FAFF)
 private val IncorrectRed = Color(0xFFFF5252)
 private val CorrectGreen = Color(0xFF42D77D)
-private val IncorrectGradientRed = Color(0xFFC62828)
-private val CorrectGradientGreen = Color(0xFF008F4C)
+private val IncorrectGradientRed = Color(0xFF7A202A)
+private val CorrectGradientGreen = Color(0xFF006B3C)
 
 private enum class Screen {
     Menu,
@@ -165,7 +165,7 @@ private fun MainMenu(
         verticalArrangement = Arrangement.SpaceBetween,
     ) {
         Text(
-            text = "Welcome to Math Facts!",
+            text = "Welcome to Math Flip!",
             color = White,
             fontSize = 34.sp,
             fontWeight = FontWeight.Bold,
@@ -182,18 +182,18 @@ private fun MainMenu(
             OperationSelector(
                 selectedOperations = selectedOperations,
                 onToggleOperation = onToggleOperation,
-                modifier = Modifier.weight(1.5f),
+                modifier = Modifier.weight(1f),
             )
             UpperBoundInput(
                 value = upperBound,
                 onValueChange = onUpperBoundChange,
                 isError = upperBound.text.isNotEmpty() && validUpperBound == null,
-                modifier = Modifier.weight(0.65f),
+                modifier = Modifier.weight(1f),
             )
             NegativeSelector(
                 checked = allowNegatives,
                 onCheckedChange = onAllowNegativesChange,
-                modifier = Modifier.weight(0.85f),
+                modifier = Modifier.weight(1f),
             )
         }
 
@@ -402,10 +402,10 @@ private fun PracticeScreen(
                 if (isAnswerVisible) {
                     Modifier.background(
                         Brush.horizontalGradient(
-                            0.0f to IncorrectGradientRed.copy(alpha = 0.5f),
-                            0.25f to IncorrectGradientRed.copy(alpha = 0.0f),
-                            0.75f to CorrectGradientGreen.copy(alpha = 0.0f),
-                            1.0f to CorrectGradientGreen.copy(alpha = 0.5f),
+                            0.0f to IncorrectGradientRed,
+                            0.25f to DeepBlue,
+                            0.75f to DeepBlue,
+                            1.0f to CorrectGradientGreen,
                         ),
                     )
                 } else {

@@ -1,6 +1,6 @@
-# Math Facts
+# Math Flip
 
-A small iOS flash-card app for practicing math facts, built with Kotlin Multiplatform and Compose Multiplatform.
+A small iOS flash-card app for practicing arithmetic, built with Kotlin Multiplatform and Compose Multiplatform.
 
 ## Requirements
 
