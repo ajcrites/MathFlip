@@ -16,30 +16,23 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -50,11 +43,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -294,72 +284,7 @@ private fun UpperBoundInput(
     isError: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    val focusManager = LocalFocusManager.current
-    var isFocused by remember { mutableStateOf(false) }
-
-    LaunchedEffect(isFocused) {
-        if (isFocused) {
-            withFrameNanos { }
-            onValueChange(value.copy(selection = TextRange(0, value.text.length)))
-        }
-    }
-
-    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        OutlinedTextField(
-            value = value,
-            onValueChange = { proposed ->
-                if (proposed.text.length <= 3 && proposed.text.all(Char::isDigit)) {
-                    onValueChange(proposed)
-                }
-            },
-            modifier = Modifier
-                .width(130.dp)
-                .onFocusChanged { state ->
-                    isFocused = state.isFocused
-                },
-            textStyle = TextStyle(
-                color = White,
-                fontSize = 28.sp,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center,
-            ),
-            singleLine = true,
-            isError = isError,
-            label = { Text("Up to") },
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.NumberPassword,
-                imeAction = ImeAction.Done,
-            ),
-            keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
-            shape = RoundedCornerShape(16.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = AccentYellow,
-                unfocusedBorderColor = AccentBlue.copy(alpha = 0.75f),
-                focusedLabelColor = White,
-                unfocusedLabelColor = White,
-                cursorColor = AccentYellow,
-                errorBorderColor = Color(0xFFFF7A7A),
-            ),
-        )
-
-        Box(
-            modifier = Modifier.height(32.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            if (isFocused) {
-                Text(
-                    text = "Done",
-                    modifier = Modifier
-                        .semantics { contentDescription = "Finish editing upper bound" }
-                        .clickable(role = Role.Button) { focusManager.clearFocus() }
-                        .padding(horizontal = 12.dp, vertical = 4.dp),
-                    color = AccentYellow,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                )
-            }
-        }
-    }
+    PlatformUpperBoundInput(value, onValueChange, isError, modifier)
 }
 
 @Composable
@@ -552,3 +477,11 @@ expect class FaceDownDetector() {
     fun start(onFaceDown: () -> Unit)
     fun stop()
 }
+
+@Composable
+expect fun PlatformUpperBoundInput(
+    value: TextFieldValue,
+    onValueChange: (TextFieldValue) -> Unit,
+    isError: Boolean,
+    modifier: Modifier = Modifier,
+)
