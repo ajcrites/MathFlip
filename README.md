@@ -23,6 +23,10 @@ Use the development scripts in `scripts/` to test, build, deploy, list devices, 
 
 Xcode invokes Gradle to compile the shared Kotlin UI into an iOS framework before building the SwiftUI host app.
 
+## Known limitations
+
+- Motion scoring is tuned for deliberate turns. Very fast yaw gestures can produce inconsistent scoring.
+
 ## Project structure
 
 - `shared/src/commonMain`: shared Kotlin UI and flash-card logic

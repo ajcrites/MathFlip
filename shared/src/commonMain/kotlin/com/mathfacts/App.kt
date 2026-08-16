@@ -60,6 +60,10 @@ import androidx.compose.ui.zIndex
 import com.mathfacts.domain.DEFAULT_MAX_BOUND
 import com.mathfacts.domain.MathFactGenerator
 import com.mathfacts.domain.Operation
+import com.mathfacts.motion.MotionSampleProvider
+import com.mathfacts.motion.PracticeMotionController
+import com.mathfacts.motion.PracticeMotionEvent
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 private val DeepBlue = Color(0xFF071A3D)
@@ -81,6 +85,8 @@ private enum class Screen {
 
 private enum class PracticePhase {
     Question,
+    Revealing,
+    AnswerLocked,
     Answer,
     Scoring,
 }
@@ -390,7 +396,8 @@ private fun PracticeScreen(
     var fact by remember(factGenerator) { mutableStateOf(factGenerator.next()) }
     var phase by remember(factGenerator) { mutableStateOf(PracticePhase.Question) }
     val results = remember(factGenerator) { mutableStateListOf<Boolean>() }
-    val faceDownDetector = remember { FaceDownDetector() }
+    val motionController = remember(factGenerator) { PracticeMotionController() }
+    val motionSampleProvider = remember { MotionSampleProvider() }
     val scope = rememberCoroutineScope()
     val questionAlpha = remember(factGenerator) { Animatable(0f) }
     val feedbackProgress = remember(factGenerator) { Animatable(0f) }
@@ -401,10 +408,19 @@ private fun PracticeScreen(
 
     fun showAnswer() {
         if (phase != PracticePhase.Question) return
+        phase = PracticePhase.Revealing
+        motionController.onAnswerShown()
         scope.launch(FullMotionDurationScale) {
             contentAlpha.animateTo(0f, tween(durationMillis = 125))
-            phase = PracticePhase.Answer
+            phase = PracticePhase.AnswerLocked
             contentScale.snapTo(0.82f)
+            launch {
+                delay(500)
+                if (phase == PracticePhase.AnswerLocked) {
+                    phase = PracticePhase.Answer
+                    motionController.unlockAnswer()
+                }
+            }
             launch {
                 contentScale.animateTo(
                     1f,
@@ -423,6 +439,7 @@ private fun PracticeScreen(
     fun recordAnswer(isCorrect: Boolean) {
         if (phase != PracticePhase.Answer) return
         phase = PracticePhase.Scoring
+        motionController.disable()
         scope.launch(FullMotionDurationScale) {
             results += isCorrect
             feedbackIsCorrect = isCorrect
@@ -432,6 +449,7 @@ private fun PracticeScreen(
             contentAlpha.animateTo(0f, tween(durationMillis = 125))
             fact = factGenerator.next()
             phase = PracticePhase.Question
+            motionController.onQuestionShown()
             contentScale.snapTo(1f)
             launch { contentAlpha.animateTo(1f, tween(durationMillis = 250)) }
             feedbackAlpha.animateTo(0f, tween(durationMillis = 250))
@@ -445,18 +463,24 @@ private fun PracticeScreen(
             questionAlpha.animateTo(1f, tween(durationMillis = 250))
         }
     }
-    DisposableEffect(faceDownDetector) {
-        faceDownDetector.start {
-            showAnswer()
+    DisposableEffect(motionSampleProvider, motionController) {
+        motionController.onQuestionShown()
+        motionSampleProvider.start { sample ->
+            when (motionController.process(sample)) {
+                PracticeMotionEvent.RevealAnswer -> showAnswer()
+                PracticeMotionEvent.Correct -> recordAnswer(isCorrect = true)
+                PracticeMotionEvent.Incorrect -> recordAnswer(isCorrect = false)
+                null -> Unit
+            }
         }
-        onDispose { faceDownDetector.stop() }
+        onDispose { motionSampleProvider.stop() }
     }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .then(
-                if (phase == PracticePhase.Answer) {
+                if (phase == PracticePhase.Answer || phase == PracticePhase.AnswerLocked) {
                     Modifier.background(
                         Brush.horizontalGradient(
                             0.0f to IncorrectGradientRed,
@@ -488,7 +512,10 @@ private fun PracticeScreen(
                             up.position.x <= size.width * 0.2f -> recordAnswer(isCorrect = false)
                             up.position.x >= size.width * 0.8f -> recordAnswer(isCorrect = true)
                         }
-                        PracticePhase.Scoring -> Unit
+                        PracticePhase.Revealing,
+                        PracticePhase.AnswerLocked,
+                        PracticePhase.Scoring,
+                        -> Unit
                     }
                 }
             },
@@ -545,7 +572,10 @@ private fun PracticeScreen(
                     scaleY = contentScale.value
                 },
         ) {
-            if (phase != PracticePhase.Question) {
+            if (phase == PracticePhase.AnswerLocked ||
+                phase == PracticePhase.Answer ||
+                phase == PracticePhase.Scoring
+            ) {
                 Column(
                     modifier = Modifier.padding(horizontal = 48.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -728,11 +758,6 @@ private fun FactText(text: String, fontSize: Int, modifier: Modifier = Modifier)
             ),
         ),
     )
-}
-
-expect class FaceDownDetector() {
-    fun start(onFaceDown: () -> Unit)
-    fun stop()
 }
 
 @Composable
