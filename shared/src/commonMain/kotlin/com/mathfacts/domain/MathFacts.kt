@@ -30,13 +30,15 @@ data class MathFact(
 
 class MathFactGenerator(
     private val range: IntRange = DEFAULT_MIN_BOUND..DEFAULT_MAX_BOUND,
+    operations: Set<Operation> = Operation.entries.toSet(),
     private val random: Random = Random.Default,
 ) {
     private val availableOperations: List<Operation>
 
     init {
         require(!range.isEmpty()) { "Math fact range cannot be empty." }
-        availableOperations = Operation.entries.filter { validFirstBounds(it) != null }
+        require(operations.isNotEmpty()) { "At least one operation must be selected." }
+        availableOperations = operations.filter { validFirstBounds(it) != null }
         require(availableOperations.isNotEmpty()) {
             "Math fact range does not contain a valid operand and answer combination."
         }
